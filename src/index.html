@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FYP Research Studio</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script type="module" src="/main.js" defer></script>
+  </head>
+  <body>
+    <div class="glass-background">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+    </div>
+    <main class="app-shell">
+      <header class="app-header glass-panel">
+        <div class="header-content">
+          <h1>FYP Research Studio</h1>
+          <p>Next-Gen Workspace for Academic Research & Development</p>
+        </div>
+        <div class="header-actions">
+          <button id="export-state-btn" class="ghost-btn">Export Backup</button>
+          <button id="import-state-btn" class="ghost-btn">Import Backup</button>
+          <input id="import-state-file" type="file" accept="application/json" hidden />
+        </div>
+      </header>
+
+      <nav class="tab-nav glass-panel">
+        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="research">Research Papers</button>
+        <button class="tab-btn" data-tab="kanban">Kanban Tasks</button>
+        <button class="tab-btn" data-tab="nodes">Node Connections</button>
+      </nav>
+
+      <section id="dashboard" class="tab-panel active">
+        <div class="panel-header">
+          <h2>Project Overview</h2>
+        </div>
+        <div class="dashboard-layout">
+          <div class="stat-card glass-panel">
+            <h3>Total Papers</h3>
+            <div id="stat-papers" class="stat-value">0</div>
+          </div>
+          <div class="stat-card glass-panel">
+            <h3>Tasks To Do</h3>
+            <div id="stat-todo" class="stat-value">0</div>
+          </div>
+          <div class="stat-card glass-panel">
+            <h3>Tasks Doing</h3>
+            <div id="stat-doing" class="stat-value">0</div>
+          </div>
+          <div class="stat-card glass-panel">
+            <h3>Tasks Done</h3>
+            <div id="stat-done" class="stat-value">0</div>
+          </div>
+        </div>
+        <div class="pomodoro-section glass-panel mt-4">
+          <h3>Pomodoro Timer</h3>
+          <div class="pomodoro-container">
+            <div id="pomodoro-timer" class="timer-display">25:00</div>
+            <div class="pomodoro-actions">
+              <button id="pomodoro-start" class="primary-btn">Start</button>
+              <button id="pomodoro-pause" class="ghost-btn">Pause</button>
+              <button id="pomodoro-reset" class="danger-btn">Reset</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="research" class="tab-panel">
+        <div class="panel-header">
+          <h2>Paper Tracker + Notes</h2>
+          <button id="add-paper-btn" class="primary-btn">Add Paper</button>
+        </div>
+        <div class="research-layout">
+          <section class="paper-list-wrap glass-panel">
+            <div class="paper-list-header">
+              <h3>Papers</h3>
+              <input type="text" id="paper-search" class="search-input" placeholder="Search title, authors or labels..." />
+            </div>
+            <div id="paper-list" class="paper-list"></div>
+          </section>
+          <section class="paper-detail-wrap glass-panel">
+            <h3>Paper Details</h3>
+            <div id="paper-detail" class="empty-state">
+              Select a paper to review abstract, findings, and your notes.
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="kanban" class="tab-panel">
+        <div class="panel-header">
+          <h2>Draggable Kanban</h2>
+          <button id="add-task-btn" class="primary-btn">Add Task</button>
+        </div>
+        <div class="kanban-board">
+          <section class="kanban-column glass-panel" data-status="todo">
+            <h3>To Do</h3>
+            <div class="task-list" id="todo-list"></div>
+          </section>
+          <section class="kanban-column glass-panel" data-status="doing">
+            <h3>Doing</h3>
+            <div class="task-list" id="doing-list"></div>
+          </section>
+          <section class="kanban-column glass-panel" data-status="done">
+            <h3>Done</h3>
+            <div class="task-list" id="done-list"></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="nodes" class="tab-panel">
+        <div class="panel-header">
+          <h2>Connect-the-Dots Board</h2>
+          <div class="node-tools">
+            <button id="add-node-btn" class="primary-btn">Add Node</button>
+            <button id="clear-links-btn" class="ghost-btn">Clear Links</button>
+          </div>
+        </div>
+        <div id="node-board" class="node-board glass-panel">
+          <svg id="link-layer" class="link-layer"></svg>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="paper-dialog" class="glass-dialog">
+      <form method="dialog" id="paper-form" class="dialog-form">
+        <h3>Add Research Paper</h3>
+        <label>
+          Title
+          <input name="title" required />
+        </label>
+        <label>
+          Author(s)
+          <input name="authors" required />
+        </label>
+        <label>
+          Year
+          <input name="year" type="number" min="1900" max="2100" required />
+        </label>
+        <label>
+          Labels (comma separated)
+          <input name="labels" placeholder="e.g. AI, Deep Learning, Literature Review" />
+        </label>
+        <label>
+          Problem gap / relevance
+          <textarea name="gap" rows="3" required></textarea>
+        </label>
+        <label>
+          Proposed solution ideas
+          <textarea name="solution" rows="3" required></textarea>
+        </label>
+        <label>
+          Upload paper file (PDF / doc / txt)
+          <div id="current-file-display" style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.3rem;"></div>
+          <input id="paper-file-input" name="paperFile" type="file" />
+        </label>
+        <menu>
+          <button type="button" id="cancel-paper-btn" class="ghost-btn">Cancel</button>
+          <button type="submit" class="primary-btn">Save Paper</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="viewer-dialog" class="glass-dialog" style="width: min(900px, 95vw); height: 85vh; padding: 0; overflow: hidden;">
+      <div style="display: flex; flex-direction: column; height: 100%;">
+        <div class="panel-header" style="padding: 1rem; margin: 0; border-bottom: 1px solid var(--glass-border); background: var(--bg-color);">
+          <h2 id="viewer-title" style="margin: 0; font-size: 1.2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Document Preview</h2>
+          <button id="close-viewer-btn" class="ghost-btn" style="padding: 0.4rem 0.8rem;">Close</button>
+        </div>
+        <div id="viewer-content" style="flex: 1; overflow: hidden; background: #fff;"></div>
+      </div>
+    </dialog>
+
+    <dialog id="task-dialog" class="glass-dialog">
+      <form method="dialog" id="task-form" class="dialog-form">
+        <h3>Add Kanban Task</h3>
+        <label>
+          Task title
+          <input name="title" required />
+        </label>
+        <label>
+          Description
+          <textarea name="description" rows="3"></textarea>
+        </label>
+        <label>
+          Priority
+          <select name="priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <menu>
+          <button type="button" id="cancel-task-btn" class="ghost-btn">Cancel</button>
+          <button type="submit" class="primary-btn">Save Task</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="node-dialog" class="glass-dialog">
+      <form method="dialog" id="node-form" class="dialog-form">
+        <h3>Add Node</h3>
+        <label>
+          Node title
+          <input name="title" placeholder="e.g., Dataset Limitation" required />
+        </label>
+        <label>
+          Short note
+          <textarea name="content" rows="3" placeholder="Description or note for this node"></textarea>
+        </label>
+        <menu>
+          <button type="button" id="cancel-node-btn" class="ghost-btn">Cancel</button>
+          <button type="submit" class="primary-btn">Save Node</button>
+        </menu>
+      </form>
+    </dialog>
+  </body>
+</html>
