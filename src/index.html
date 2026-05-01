@@ -32,6 +32,8 @@
         <button class="tab-btn" data-tab="research">Research Papers</button>
         <button class="tab-btn" data-tab="kanban">Kanban Tasks</button>
         <button class="tab-btn" data-tab="nodes">Node Connections</button>
+        <button class="tab-btn" data-tab="terms">Terms & Glossary</button>
+        <button class="tab-btn" data-tab="reports">Reports & Findings</button>
       </nav>
 
       <section id="dashboard" class="tab-panel active">
@@ -118,16 +120,60 @@
           <div class="node-tools">
             <button id="add-node-btn" class="primary-btn">Add Node</button>
             <button id="clear-links-btn" class="ghost-btn">Clear Links</button>
+            <button id="center-view-btn" class="ghost-btn">Center View</button>
+            <button id="fullscreen-btn" class="ghost-btn">Full Screen</button>
           </div>
         </div>
         <div id="node-board" class="node-board glass-panel">
-          <svg id="link-layer" class="link-layer"></svg>
+          <div id="node-board-canvas" class="node-board-canvas">
+            <svg id="link-layer" class="link-layer"></svg>
+          </div>
+        </div>
+      </section>
+
+      <section id="terms" class="tab-panel">
+        <div class="panel-header">
+          <h2>Terms & Definitions</h2>
+          <button id="add-term-btn" class="primary-btn">Add Term</button>
+        </div>
+        <div class="terms-layout">
+          <div class="terms-list-header glass-panel" style="margin-bottom: 1rem; padding: 1rem;">
+            <input type="text" id="term-search" class="search-input" placeholder="Search terms or definitions..." style="width: 100%;" />
+          </div>
+          <div id="term-list" class="term-list" style="display: grid; gap: 1rem; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));"></div>
+        </div>
+      </section>
+
+      <section id="reports" class="tab-panel">
+        <div class="panel-header">
+          <h2>Reports & Findings</h2>
+          <button id="add-report-btn" class="primary-btn">New Report</button>
+        </div>
+        <div class="reports-layout">
+          <aside class="report-sidebar glass-panel">
+            <div class="report-sidebar-header">
+              <h3>My Reports</h3>
+              <input type="text" id="report-search" class="search-input" placeholder="Search reports..." />
+            </div>
+            <div id="report-list" class="report-list">
+              <p class="empty-state">No reports yet. Create your first one.</p>
+            </div>
+          </aside>
+          <div class="report-editor-wrap glass-panel">
+            <div id="report-editor" class="report-editor-empty">
+              <div class="report-empty-state">
+                <div class="report-empty-icon">📝</div>
+                <h3>Select or create a report</h3>
+                <p>Your drafts for chapters, proposals, and findings live here.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
 
     <dialog id="paper-dialog" class="glass-dialog">
-      <form method="dialog" id="paper-form" class="dialog-form">
+      <form id="paper-form" class="dialog-form">
         <h3>Add Research Paper</h3>
         <label>
           Title
@@ -176,7 +222,7 @@
     </dialog>
 
     <dialog id="task-dialog" class="glass-dialog">
-      <form method="dialog" id="task-form" class="dialog-form">
+      <form id="task-form" class="dialog-form">
         <h3>Add Kanban Task</h3>
         <label>
           Task title
@@ -202,19 +248,111 @@
     </dialog>
 
     <dialog id="node-dialog" class="glass-dialog">
-      <form method="dialog" id="node-form" class="dialog-form">
+      <form id="node-form" class="dialog-form">
         <h3>Add Node</h3>
         <label>
-          Node title
-          <input name="title" placeholder="e.g., Dataset Limitation" required />
+          Node Type
+          <select name="type" id="node-type-select">
+            <option value="general">General Node</option>
+            <option value="paper">Research Paper</option>
+          </select>
         </label>
-        <label>
-          Short note
-          <textarea name="content" rows="3" placeholder="Description or note for this node"></textarea>
-        </label>
+        
+        <div id="general-node-fields" style="display: flex; flex-direction: column; gap: 1rem;">
+          <label>
+            Node title
+            <input name="title" id="node-title-input" placeholder="e.g., Dataset Limitation" required />
+          </label>
+          <label>
+            Short note
+            <textarea name="content" id="node-content-input" rows="3" placeholder="Description or note for this node"></textarea>
+          </label>
+        </div>
+
+        <div id="paper-node-fields" style="display: none; flex-direction: column; gap: 1rem;">
+          <label>
+            Select Paper
+            <select name="paperId" id="node-paper-select">
+            </select>
+          </label>
+        </div>
         <menu>
           <button type="button" id="cancel-node-btn" class="ghost-btn">Cancel</button>
           <button type="submit" class="primary-btn">Save Node</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="term-dialog" class="glass-dialog">
+      <form id="term-form" class="dialog-form">
+        <h3>Add Term</h3>
+        <label>
+          Definition Name
+          <input name="name" required />
+        </label>
+        <label>
+          Description
+          <textarea name="description" rows="3" required></textarea>
+        </label>
+        <label>
+          Citation (Research Paper)
+          <select name="paperId" id="term-paper-select">
+            <option value="">None</option>
+          </select>
+        </label>
+        <menu>
+          <button type="button" id="cancel-term-btn" class="ghost-btn">Cancel</button>
+          <button type="submit" class="primary-btn">Save Term</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="report-dialog" class="glass-dialog">
+      <form id="report-form" class="dialog-form">
+        <h3>New Report</h3>
+        <label>
+          Report Title
+          <input name="title" required placeholder="e.g. Chapter 1: Introduction" />
+        </label>
+        <label>
+          Description (optional)
+          <textarea name="description" rows="2" placeholder="Brief description of this report"></textarea>
+        </label>
+        <menu>
+          <button type="button" id="cancel-report-btn" class="ghost-btn">Cancel</button>
+          <button type="submit" class="primary-btn">Create Report</button>
+        </menu>
+      </form>
+    </dialog>
+
+    <dialog id="section-dialog" class="glass-dialog">
+      <form id="section-form" class="dialog-form">
+        <h3>Add Section</h3>
+        <label>
+          Section Type
+          <select name="type" id="section-type-select">
+            <option value="custom">Custom Section</option>
+            <option value="title">Title Page</option>
+            <option value="background">Project Background</option>
+            <option value="problem">Problem Statement</option>
+            <option value="objectives">Objectives</option>
+            <option value="scope">Scope</option>
+            <option value="literature">Literature Review</option>
+            <option value="methodology">Methodology</option>
+            <option value="findings">Findings & Results</option>
+            <option value="discussion">Discussion</option>
+            <option value="conclusion">Conclusion</option>
+            <option value="references">References</option>
+            <option value="appendix">Appendix</option>
+          </select>
+        </label>
+        <label id="section-custom-title-label">
+          Section Title
+          <input name="customTitle" placeholder="e.g. System Architecture" />
+        </label>
+        <menu>
+          <button type="button" id="cancel-section-btn" class="ghost-btn">Cancel</button>
+          <button type="submit" class="primary-btn">Add Section</button>
         </menu>
       </form>
     </dialog>
