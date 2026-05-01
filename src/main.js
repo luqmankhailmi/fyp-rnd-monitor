@@ -56,6 +56,7 @@ const state = {
   reports: [],
   selectedPaperId: null,
   selectedReportId: null,
+  paperListView: 'list',
   selectedNodeForLink: null,
   draggedTaskId: null,
   draggedNodeId: null,
@@ -84,6 +85,122 @@ function createId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 }
 
+function setPaperViewMode(mode) {
+  state.paperListView = mode === 'grid' ? 'grid' : 'list';
+  document.querySelectorAll('#paper-view-toggle button').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.view === state.paperListView);
+  });
+  const layout = document.querySelector('.research-layout');
+  if (layout) {
+    layout.classList.toggle('grid-view', state.paperListView === 'grid');
+  }
+  renderPapers();
+}
+
+function showPaperDetailDialog(paper) {
+  const detailDialog = document.querySelector('#paper-detail-dialog');
+  if (!detailDialog) return;
+
+  const content = detailDialog.querySelector('.paper-detail-dialog-content');
+  content.innerHTML = `
+    <div class="paper-detail-dialog-header">
+      <h3>${paper.title}</h3>
+      <button type="button" id="close-paper-detail-dialog" class="ghost-btn">Close</button>
+    </div>
+    <div class="paper-detail-dialog-body">
+      <p><strong>Authors:</strong> ${paper.authors}</p>
+      <p><strong>Year:</strong> ${paper.year}</p>
+      ${paper.labels && paper.labels.length > 0 ? `<div class="paper-labels" style="margin: 0.75rem 0">${paper.labels.map(l => `<span class="paper-label">${l}</span>`).join('')}</div>` : ''}
+      <p><strong>Problem Gap:</strong> ${paper.gap}</p>
+      <p><strong>Solution Ideas:</strong> ${paper.solution}</p>
+      <label>
+        Research notes
+        <textarea id="detail-notes-dialog" rows="8">${paper.notes || ''}</textarea>
+      </label>
+      <div class="detail-actions paper-detail-dialog-actions">
+        <button id="edit-paper-dialog-btn" class="ghost-btn">Edit</button>
+        <button id="save-notes-dialog-btn" class="primary-btn">Save Notes</button>
+        <button id="delete-paper-dialog-btn" class="danger-btn">Delete Paper</button>
+        ${paper.fileName ? '<button id="open-file-dialog-btn" class="ghost-btn">Open in Browser</button> <button id="download-file-dialog-btn" class="ghost-btn">Download</button>' : ''}
+      </div>
+    </div>
+  `;
+
+  const detailNotes = detailDialog.querySelector('#detail-notes-dialog');
+
+  detailDialog.querySelector('#close-paper-detail-dialog').addEventListener('click', () => {
+    detailDialog.close();
+  });
+
+  detailDialog.querySelector('#save-notes-dialog-btn').addEventListener('click', () => {
+    paper.notes = detailNotes.value.trim();
+    saveState();
+    detailDialog.close();
+  });
+
+  detailDialog.querySelector('#edit-paper-dialog-btn').addEventListener('click', () => {
+    window.editingPaperId = paper.id;
+    const form = document.querySelector('#paper-form');
+    form.title.value = paper.title;
+    form.authors.value = paper.authors;
+    form.year.value = paper.year;
+    form.labels.value = paper.labels ? paper.labels.join(', ') : '';
+    form.gap.value = paper.gap;
+    form.solution.value = paper.solution;
+    document.querySelector('#current-file-display').textContent = paper.fileName
+      ? `Current file: ${paper.fileName} (Upload a new file to replace)`
+      : 'No file currently attached';
+    document.querySelector('#paper-dialog h3').textContent = 'Edit Research Paper';
+    detailDialog.close();
+    document.querySelector('#paper-dialog').showModal();
+  });
+
+  detailDialog.querySelector('#delete-paper-dialog-btn').addEventListener('click', async () => {
+    if (paper.fileName) {
+      try { await deleteFileData(paper.id); } catch (e) { console.warn('Could not delete file data:', e); }
+    }
+    state.papers = state.papers.filter((item) => item.id !== paper.id);
+    state.selectedPaperId = null;
+    saveState();
+    renderPapers();
+    detailDialog.close();
+  });
+
+  const openBtn = detailDialog.querySelector('#open-file-dialog-btn');
+  if (openBtn) {
+    openBtn.addEventListener('click', () => {
+      const mime = paper.fileDataUrl.match(/:(.*?);/)[1];
+      const viewerDialog = document.querySelector('#viewer-dialog');
+      document.querySelector('#viewer-title').textContent = paper.fileName || 'Document';
+      const contentDiv = document.querySelector('#viewer-content');
+      if (mime.startsWith('image/')) {
+        contentDiv.innerHTML = `<img src="${paper.fileDataUrl}" style="width:100%; height:100%; object-fit:contain; background:#0f172a;" />`;
+      } else {
+        const blob = dataUrlToBlob(paper.fileDataUrl);
+        const url = URL.createObjectURL(blob);
+        contentDiv.innerHTML = `<iframe src="${url}" style="width:100%; height:100%; border:none;"></iframe>`;
+        contentDiv.dataset.objectUrl = url;
+      }
+      detailDialog.close();
+      viewerDialog.showModal();
+    });
+  }
+
+  const downloadBtn = detailDialog.querySelector('#download-file-dialog-btn');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      const blob = dataUrlToBlob(paper.fileDataUrl);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = paper.fileName;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+  }
+
+  detailDialog.showModal();
+}
+
 function saveState() {
   // Strip fileDataUrl from papers before saving to localStorage (they go to IndexedDB)
   const papersForStorage = state.papers.map(p => {
@@ -97,6 +214,7 @@ function saveState() {
     links: state.links,
     terms: state.terms,
     reports: state.reports,
+    paperListView: state.paperListView,
     canvasTransform: state.canvasTransform,
   };
   try {
@@ -117,6 +235,7 @@ function loadState() {
     state.links = Array.isArray(parsed.links) ? parsed.links : [];
     state.terms = Array.isArray(parsed.terms) ? parsed.terms : [];
     state.reports = Array.isArray(parsed.reports) ? parsed.reports : [];
+    state.paperListView = parsed.paperListView === 'grid' ? 'grid' : 'list';
     state.canvasTransform = parsed.canvasTransform || { x: 0, y: 0, scale: 1 };
   } catch {
     localStorage.removeItem(STORAGE_KEY);
@@ -154,6 +273,7 @@ function renderPapers() {
   const searchInput = document.querySelector("#paper-search");
   const query = searchInput ? searchInput.value.toLowerCase() : "";
   paperList.innerHTML = "";
+  paperList.classList.toggle('grid', state.paperListView === 'grid');
 
   const filteredPapers = state.papers.filter(paper => {
     const textToSearch = `${paper.title} ${paper.authors} ${paper.labels ? paper.labels.join(" ") : ""}`.toLowerCase();
@@ -171,7 +291,7 @@ function renderPapers() {
       const item = document.createElement("article");
       item.className = "paper-item";
       if (paper.id === state.selectedPaperId) item.classList.add("selected");
-      
+
       const labelsHtml = paper.labels && paper.labels.length > 0
         ? `<div class="paper-labels">${paper.labels.map(l => `<span class="paper-label">${l}</span>`).join('')}</div>`
         : "";
@@ -184,6 +304,9 @@ function renderPapers() {
       `;
       item.addEventListener("click", () => {
         state.selectedPaperId = paper.id;
+        if (state.paperListView === 'grid') {
+          showPaperDetailDialog(paper);
+        }
         renderPapers();
       });
       paperList.appendChild(item);
@@ -238,7 +361,7 @@ function renderPaperDetail() {
     form.labels.value = paper.labels ? paper.labels.join(", ") : "";
     form.gap.value = paper.gap;
     form.solution.value = paper.solution;
-    
+
     const fileDisplay = document.querySelector("#current-file-display");
     if (paper.fileName) {
       fileDisplay.textContent = `Current file: ${paper.fileName} (Upload a new file to replace)`;
@@ -253,12 +376,12 @@ function renderPaperDetail() {
   detail.querySelector("#delete-paper-btn").addEventListener("click", async () => {
     // Clean up file data from IndexedDB
     if (paper.fileName) {
-      try { await deleteFileData(paper.id); } catch(e) { console.warn("Could not delete file data:", e); }
+      try { await deleteFileData(paper.id); } catch (e) { console.warn("Could not delete file data:", e); }
     }
 
     state.papers = state.papers.filter((item) => item.id !== paper.id);
     state.selectedPaperId = null;
-    
+
     // Cascade delete to paper nodes
     const nodesToDelete = state.nodes.filter(n => n.type === 'paper' && n.paperId === paper.id);
     const deletedNodeIds = nodesToDelete.map(n => n.id);
@@ -281,7 +404,7 @@ function renderPaperDetail() {
       const mime = paper.fileDataUrl.match(/:(.*?);/)[1];
       const viewerDialog = document.querySelector("#viewer-dialog");
       document.querySelector("#viewer-title").textContent = paper.fileName || "Document";
-      
+
       const contentDiv = document.querySelector("#viewer-content");
       if (mime.startsWith('image/')) {
         contentDiv.innerHTML = `<img src="${paper.fileDataUrl}" style="width:100%; height:100%; object-fit:contain; background:#0f172a;" />`;
@@ -291,7 +414,7 @@ function renderPaperDetail() {
         contentDiv.innerHTML = `<iframe src="${url}" style="width:100%; height:100%; border:none;"></iframe>`;
         contentDiv.dataset.objectUrl = url;
       }
-      
+
       viewerDialog.showModal();
     });
   }
@@ -337,7 +460,7 @@ function renderTasks() {
     card.addEventListener("pointerdown", (e) => {
       if (e.target.closest('button')) return;
       e.preventDefault();
-      
+
       const rect = card.getBoundingClientRect();
       const clone = card.cloneNode(true);
       clone.style.position = "fixed";
@@ -350,7 +473,7 @@ function renderTasks() {
       clone.style.opacity = "0.8";
       clone.style.margin = "0";
       document.body.appendChild(clone);
-      
+
       card.style.opacity = "0.4";
       state.draggedTaskId = task.id;
 
@@ -362,10 +485,10 @@ function renderTasks() {
       function onPointerMove(moveEvent) {
         clone.style.left = `${moveEvent.clientX - offsetX}px`;
         clone.style.top = `${moveEvent.clientY - offsetY}px`;
-        
+
         const elemBelow = document.elementFromPoint(moveEvent.clientX, moveEvent.clientY);
         const col = elemBelow ? elemBelow.closest('.kanban-column') : null;
-        
+
         if (currentTargetCol !== col) {
           if (currentTargetCol) currentTargetCol.classList.remove("drop-target");
           currentTargetCol = col;
@@ -376,10 +499,10 @@ function renderTasks() {
       function onPointerUp(upEvent) {
         document.removeEventListener("pointermove", onPointerMove);
         document.removeEventListener("pointerup", onPointerUp);
-        
+
         clone.remove();
         card.style.opacity = "1";
-        
+
         if (currentTargetCol) {
           currentTargetCol.classList.remove("drop-target");
           const newStatus = currentTargetCol.dataset.status;
@@ -421,7 +544,7 @@ function renderTerms() {
   const termList = document.querySelector("#term-list");
   const searchInput = document.querySelector("#term-search");
   if (!termList) return;
-  
+
   const query = searchInput ? searchInput.value.toLowerCase() : "";
   termList.innerHTML = "";
 
@@ -441,7 +564,7 @@ function renderTerms() {
       const card = document.createElement("article");
       card.className = "term-card glass-panel";
       card.style.padding = "1rem";
-      
+
       let citationHtml = "";
       if (term.paperId) {
         const paper = state.papers.find(p => p.id === term.paperId);
@@ -465,7 +588,7 @@ function renderTerms() {
         const form = document.querySelector("#term-form");
         form.name.value = term.name;
         form.description.value = term.description;
-        
+
         const paperSelect = document.querySelector("#term-paper-select");
         paperSelect.innerHTML = '<option value="">None</option>';
         state.papers.forEach(p => {
@@ -523,7 +646,7 @@ function renderNodes() {
     nodeEl.style.left = `${node.x}px`;
     nodeEl.style.top = `${node.y}px`;
     nodeEl.dataset.nodeId = node.id;
-    
+
     let typeBadge = node.type === 'paper' ? `<span class="node-badge paper-badge">📄 Paper</span>` : `<span class="node-badge general-badge">📝 Note</span>`;
 
     nodeEl.innerHTML = `
@@ -539,37 +662,37 @@ function renderNodes() {
 
     nodeEl.addEventListener("pointerdown", (e) => {
       if (e.target.closest('button')) return;
-      
+
       const rect = nodeEl.getBoundingClientRect();
       const isResize = e.clientX - rect.left > rect.width - 20 && e.clientY - rect.top > rect.height - 20;
       if (isResize) return; // Allow default resize behavior
-      
+
       e.preventDefault();
       nodeEl.setPointerCapture(e.pointerId);
       state.draggedNodeId = node.id;
 
       const boardRect = document.querySelector("#node-board").getBoundingClientRect();
-      
+
       const offsetX = e.clientX - rect.left;
       const offsetY = e.clientY - rect.top;
-      
+
       let moved = false;
       const startX = e.clientX;
       const startY = e.clientY;
 
       function onPointerMove(moveEvent) {
         if (state.draggedNodeId !== node.id) return;
-        
+
         if (Math.abs(moveEvent.clientX - startX) > 3 || Math.abs(moveEvent.clientY - startY) > 3) {
           moved = true;
         }
-        
+
         const newX = (moveEvent.clientX - boardRect.left - state.canvasTransform.x - offsetX) / state.canvasTransform.scale;
         const newY = (moveEvent.clientY - boardRect.top - state.canvasTransform.y - offsetY) / state.canvasTransform.scale;
-        
+
         node.x = newX;
         node.y = newY;
-        
+
         nodeEl.style.left = `${node.x}px`;
         nodeEl.style.top = `${node.y}px`;
         renderLinks();
@@ -582,7 +705,7 @@ function renderNodes() {
           nodeEl.removeEventListener("pointermove", onPointerMove);
           nodeEl.removeEventListener("pointerup", onPointerUp);
           saveState();
-          
+
           if (!moved) {
             const actions = nodeEl.querySelector(".node-actions");
             if (actions.style.display === "none") {
@@ -627,14 +750,14 @@ function renderNodes() {
       form.type.value = node.type;
       const typeSelect = document.querySelector("#node-type-select");
       if (typeSelect) typeSelect.dispatchEvent(new Event("change"));
-      
+
       if (node.type === "paper") {
         form.paperId.value = node.paperId || "";
       } else {
         form.title.value = node.title;
         form.content.value = node.content;
       }
-      
+
       document.querySelector("#node-dialog h3").textContent = "Edit Node";
       document.querySelector("#node-dialog").showModal();
     });
@@ -710,14 +833,14 @@ function renderLinks() {
     line.setAttribute("marker-end", "url(#arrowhead)");
     layer.appendChild(line);
   }
-  
+
   layer.removeAttribute("viewBox");
 }
 
 function setupCanvasPanZoom() {
   const board = document.querySelector("#node-board");
   if (!board) return;
-  
+
   let isPanning = false;
   let startX = 0;
   let startY = 0;
@@ -726,7 +849,7 @@ function setupCanvasPanZoom() {
 
   board.addEventListener("pointerdown", (e) => {
     if (e.target.closest('.map-node') || e.target.closest('button')) return;
-    
+
     isPanning = true;
     startX = e.clientX;
     startY = e.clientY;
@@ -751,22 +874,22 @@ function setupCanvasPanZoom() {
 
   board.addEventListener("wheel", (e) => {
     e.preventDefault();
-    
+
     const boardRect = board.getBoundingClientRect();
     const mouseX = e.clientX - boardRect.left;
     const mouseY = e.clientY - boardRect.top;
-    
+
     const zoomIntensity = 0.001;
     const delta = e.deltaY * zoomIntensity;
-    
+
     let newScale = state.canvasTransform.scale * (1 - delta);
     newScale = Math.min(Math.max(0.1, newScale), 5); // clamp scale
-    
+
     const ratio = 1 - newScale / state.canvasTransform.scale;
     state.canvasTransform.x += (mouseX - state.canvasTransform.x) * ratio;
     state.canvasTransform.y += (mouseY - state.canvasTransform.y) * ratio;
     state.canvasTransform.scale = newScale;
-    
+
     applyCanvasTransform();
     saveState();
   }, { passive: false });
@@ -783,14 +906,14 @@ function centerView() {
       maxX = Math.max(maxX, n.x + 200); // approx node width
       maxY = Math.max(maxY, n.y + 100); // approx node height
     });
-    
+
     const boardRect = document.querySelector("#node-board").getBoundingClientRect();
     const contentWidth = maxX - minX;
     const contentHeight = maxY - minY;
-    
+
     const cx = minX + contentWidth / 2;
     const cy = minY + contentHeight / 2;
-    
+
     state.canvasTransform = {
       scale: 1,
       x: boardRect.width / 2 - cx,
@@ -888,7 +1011,7 @@ function setupDialogs() {
             paper.fileDataUrl = fileDataUrl;
             await saveFileData(paper.id, fileDataUrl);
           }
-          
+
           // Sync associated paper nodes
           state.nodes.forEach(n => {
             if (n.type === 'paper' && n.paperId === paper.id) {
@@ -941,7 +1064,7 @@ function setupDialogs() {
   taskForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(taskForm);
-    
+
     if (window.editingTaskId) {
       const task = state.tasks.find((t) => t.id === window.editingTaskId);
       if (task) {
@@ -971,7 +1094,7 @@ function setupDialogs() {
     addTermBtn.addEventListener("click", () => {
       window.editingTermId = null;
       termForm.reset();
-      
+
       termPaperSelect.innerHTML = '<option value="">None</option>';
       state.papers.forEach(p => {
         const opt = document.createElement("option");
@@ -991,7 +1114,7 @@ function setupDialogs() {
     termForm.addEventListener("submit", (event) => {
       event.preventDefault();
       const data = new FormData(termForm);
-      
+
       if (window.editingTermId) {
         const term = state.terms.find((t) => t.id === window.editingTermId);
         if (term) {
@@ -1028,7 +1151,7 @@ function setupDialogs() {
         generalFields.style.display = "none";
         paperFields.style.display = "flex";
         document.querySelector("#node-title-input").removeAttribute("required");
-        
+
         paperSelect.innerHTML = state.papers.length ? '' : '<option value="">No papers available</option>';
         state.papers.forEach(p => {
           const opt = document.createElement("option");
@@ -1053,7 +1176,7 @@ function setupDialogs() {
     nodeDialog.showModal();
   });
   document.querySelector("#cancel-node-btn").addEventListener("click", () => nodeDialog.close());
-  
+
   nodeForm.addEventListener("submit", (event) => {
     event.preventDefault();
     const data = new FormData(nodeForm);
@@ -1079,7 +1202,7 @@ function setupDialogs() {
       title = String(data.get("title") || "").trim();
       content = String(data.get("content") || "").trim();
     }
-    
+
     if (window.editingNodeId) {
       const node = state.nodes.find(n => n.id === window.editingNodeId);
       if (node) {
@@ -1100,7 +1223,7 @@ function setupDialogs() {
         y: 24 + (state.nodes.length % 3) * 110,
       });
     }
-    
+
     saveState();
     renderNodes();
     renderLinks();
@@ -1583,12 +1706,18 @@ window.addEventListener("DOMContentLoaded", async () => {
   applyCanvasTransform();
   renderDashboard();
   setupPomodoro();
-  
+
   const searchInput = document.querySelector("#paper-search");
   if (searchInput) {
     searchInput.addEventListener("input", renderPapers);
   }
-  
+
+  const viewToggle = document.querySelectorAll('#paper-view-toggle button');
+  viewToggle.forEach((button) => {
+    button.addEventListener('click', () => setPaperViewMode(button.dataset.view));
+  });
+  setPaperViewMode(state.paperListView);
+
   const termSearchInput = document.querySelector("#term-search");
   if (termSearchInput) {
     termSearchInput.addEventListener("input", renderTerms);
