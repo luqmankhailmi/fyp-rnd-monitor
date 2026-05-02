@@ -1410,6 +1410,9 @@ const SECTION_PLACEHOLDERS = {
 };
 
 let reportSaveTimers = {};
+let activeEditor = null;
+let activeCitation = null;
+let savedRange = null;
 
 function renderReportList() {
   const listEl = document.querySelector("#report-list");
@@ -1526,13 +1529,14 @@ function createSectionCard(report, section, index) {
         <span class="section-title-display">${section.title}</span>
       </div>
       <div class="section-header-actions">
+        <button class="section-cite-btn" title="Add citation">Cite</button>
         <button class="section-collapse-btn" title="Collapse/Expand">▼</button>
         <button class="section-rename-btn" title="Rename">✎</button>
         <button class="section-delete-btn" title="Delete">×</button>
       </div>
     </div>
     <div class="section-body">
-      <textarea placeholder="${placeholder}">${section.content || ""}</textarea>
+      <div class="section-editor" contenteditable="true" placeholder="${placeholder}">${section.content || ""}</div>
     </div>
     <div class="section-footer">
       <span class="section-word-count">${wordCount} word${wordCount !== 1 ? "s" : ""}</span>
@@ -1541,12 +1545,13 @@ function createSectionCard(report, section, index) {
   `;
 
   // Auto-save on input with debounce
-  const textarea = card.querySelector("textarea");
+  const editor = card.querySelector(".section-editor");
   const wordCountEl = card.querySelector(".section-word-count");
   const saveIndicator = card.querySelector(".section-save-indicator");
-  textarea.addEventListener("input", () => {
-    section.content = textarea.value;
-    const wc = textarea.value.trim().split(/\s+/).filter(w => w).length;
+  editor.addEventListener("input", () => {
+    section.content = editor.innerHTML;
+    const text = editor.innerText || "";
+    const wc = text.trim().split(/\s+/).filter(w => w).length;
     wordCountEl.textContent = `${wc} word${wc !== 1 ? "s" : ""}`;
     clearTimeout(reportSaveTimers[section.id]);
     reportSaveTimers[section.id] = setTimeout(() => {
@@ -1557,6 +1562,32 @@ function createSectionCard(report, section, index) {
       const savedSpan = document.querySelector(".report-last-saved");
       if (savedSpan) savedSpan.innerHTML = `<span class="save-dot"></span> Saved: ${new Date(report.updatedAt).toLocaleString()}`;
     }, 600);
+  });
+
+  // Handle citation clicks
+  editor.addEventListener("click", (e) => {
+    const citation = e.target.closest(".citation-link");
+    if (citation) {
+      openCitationDetail(citation);
+    }
+  });
+
+  // Prevent rich text pasting
+  editor.addEventListener("paste", (e) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+  });
+
+  card.querySelector(".section-cite-btn").addEventListener("mousedown", () => {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      savedRange = selection.getRangeAt(0);
+    }
+  });
+
+  card.querySelector(".section-cite-btn").addEventListener("click", () => {
+    openCitationPicker(editor);
   });
 
   card.querySelector(".section-collapse-btn").addEventListener("click", () => {
@@ -1680,6 +1711,137 @@ function setupReportDialogs() {
   });
 }
 
+function setupCitationLogic() {
+  const pickerDialog = document.querySelector("#citation-picker-dialog");
+  const detailDialog = document.querySelector("#citation-detail-dialog");
+  const searchInput = document.querySelector("#citation-search");
+  const paperList = document.querySelector("#citation-paper-list");
+  
+  if (!pickerDialog) return;
+
+  searchInput.addEventListener("input", () => renderCitationPapers(searchInput.value));
+
+  document.querySelector("#close-citation-picker").addEventListener("click", () => pickerDialog.close());
+  document.querySelector("#close-citation-detail").addEventListener("click", () => detailDialog.close());
+
+  document.querySelector("#remove-citation-btn").addEventListener("click", () => {
+    if (activeCitation) {
+      const editor = activeCitation.closest(".section-editor");
+      activeCitation.remove();
+      if (editor) editor.dispatchEvent(new Event("input"));
+      detailDialog.close();
+      activeCitation = null;
+    }
+  });
+}
+
+function renderCitationPapers(query = "") {
+  const paperList = document.querySelector("#citation-paper-list");
+  paperList.innerHTML = "";
+  const filtered = state.papers.filter(p => 
+    p.title.toLowerCase().includes(query.toLowerCase()) || 
+    p.authors.toLowerCase().includes(query.toLowerCase())
+  );
+
+  if (filtered.length === 0) {
+    paperList.innerHTML = `<p class="empty-state">No papers found.</p>`;
+    return;
+  }
+
+  filtered.forEach(paper => {
+    const item = document.createElement("div");
+    item.className = "report-list-item";
+    item.innerHTML = `
+      <h4>${paper.title}</h4>
+      <div class="report-meta">
+        <span>${paper.authors} (${paper.year})</span>
+      </div>
+    `;
+    item.addEventListener("click", (e) => {
+      e.stopPropagation();
+      console.log("Paper item clicked:", paper.title);
+      insertCitation(paper);
+    });
+    paperList.appendChild(item);
+  });
+}
+
+function openCitationPicker(editor) {
+  console.log("Opening citation picker for editor:", editor);
+  activeEditor = editor;
+  
+  // If range wasn't captured by mousedown, try one last time
+  if (!savedRange) {
+    const selection = window.getSelection();
+    if (selection.rangeCount > 0) {
+      savedRange = selection.getRangeAt(0);
+    }
+  }
+
+  document.querySelector("#citation-search").value = "";
+  renderCitationPapers();
+  const dialog = document.querySelector("#citation-picker-dialog");
+  if (dialog) dialog.showModal();
+}
+
+function insertCitation(paper) {
+  console.log("Attempting to insert citation for:", paper.title);
+  const pickerDialog = document.querySelector("#citation-picker-dialog");
+  if (pickerDialog) pickerDialog.close();
+
+  if (!activeEditor) {
+    console.error("Citation Error: No active editor found.");
+    return;
+  }
+
+  const author = paper.authors && paper.authors.trim() 
+    ? paper.authors.split(",")[0].trim().split(" ").pop() 
+    : "Unknown";
+  const citationHtml = `<span class="citation-link" contenteditable="false" data-paper-id="${paper.id}">(${author}, ${paper.year})</span>&nbsp;`;
+  
+  activeEditor.focus();
+  
+  let inserted = false;
+  if (savedRange) {
+    try {
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(savedRange);
+      inserted = document.execCommand("insertHTML", false, citationHtml);
+    } catch (e) {
+      console.warn("execCommand insertHTML failed:", e);
+    }
+  }
+
+  if (!inserted) {
+    console.log("Using fallback insertion (append)");
+    activeEditor.innerHTML += citationHtml;
+  }
+  
+  activeEditor.dispatchEvent(new Event("input"));
+  savedRange = null;
+}
+
+function openCitationDetail(citationEl) {
+  activeCitation = citationEl;
+  const paperId = citationEl.dataset.paperId;
+  const paper = state.papers.find(p => p.id === paperId);
+  const content = document.querySelector("#citation-detail-content");
+  
+  if (paper) {
+    content.innerHTML = `
+      <p><strong>Title:</strong> ${paper.title}</p>
+      <p><strong>Authors:</strong> ${paper.authors}</p>
+      <p><strong>Year:</strong> ${paper.year}</p>
+      <p><strong>Labels:</strong> ${paper.labels ? paper.labels.join(", ") : "None"}</p>
+    `;
+  } else {
+    content.innerHTML = `<p>Paper details not found. It may have been deleted.</p>`;
+  }
+  
+  document.querySelector("#citation-detail-dialog").showModal();
+}
+
 window.addEventListener("resize", renderLinks);
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -1691,6 +1853,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   await loadFileDataForPapers();
   setupDialogs();
   setupReportDialogs();
+  setupCitationLogic();
   setupKanbanDropzones();
   setupCanvasPanZoom();
   setupNodeBoardDnD();

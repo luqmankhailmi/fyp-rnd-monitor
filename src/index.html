@@ -376,6 +376,32 @@
       </menu>
     </form>
   </dialog>
+
+  <dialog id="citation-picker-dialog" class="glass-dialog">
+    <div class="dialog-form">
+      <h3>Select Paper to Cite</h3>
+      <input type="text" id="citation-search" class="search-input" placeholder="Search papers..." style="width: 100%; margin-bottom: 1rem;" />
+      <div id="citation-paper-list" class="report-list" style="max-height: 400px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+        <!-- Papers will be listed here -->
+      </div>
+      <menu>
+        <button type="button" id="close-citation-picker" class="ghost-btn">Cancel</button>
+      </menu>
+    </div>
+  </dialog>
+
+  <dialog id="citation-detail-dialog" class="glass-dialog">
+    <div class="dialog-form">
+      <h3>Citation Details</h3>
+      <div id="citation-detail-content" style="display: flex; flex-direction: column; gap: 0.75rem; line-height: 1.5;">
+        <!-- Details will be shown here -->
+      </div>
+      <menu>
+        <button type="button" id="remove-citation-btn" class="danger-btn">Remove Citation</button>
+        <button type="button" id="close-citation-detail" class="ghost-btn">Close</button>
+      </menu>
+    </div>
+  </dialog>
 </body>
 
 </html>

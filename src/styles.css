@@ -1133,11 +1133,20 @@ menu {
   color: var(--danger);
 }
 
+.section-header-actions .section-cite-btn {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.section-header-actions .section-cite-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
 .section-body {
   padding: 1rem;
 }
 
-.section-body textarea {
+.section-body .section-editor {
   width: 100%;
   min-height: 120px;
   background: rgba(0, 0, 0, 0.15);
@@ -1148,15 +1157,42 @@ menu {
   font-family: 'Outfit', sans-serif;
   font-size: 0.92rem;
   line-height: 1.7;
-  resize: vertical;
+  overflow-y: auto;
   transition: all 0.2s;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
-.section-body textarea:focus {
+.section-body .section-editor:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
   background: rgba(0, 0, 0, 0.25);
+}
+
+.section-body .section-editor[contenteditable=true]:empty:before {
+  content: attr(placeholder);
+  color: rgba(148, 163, 184, 0.5);
+  pointer-events: none;
+}
+
+.citation-link {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.2);
+  padding: 0 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: all 0.2s;
+  display: inline-block;
+  user-select: none;
+  font-weight: 500;
+}
+
+.citation-link:hover {
+  background: rgba(99, 102, 241, 0.4);
+  color: #fff;
 }
 
 .section-body textarea::placeholder {
